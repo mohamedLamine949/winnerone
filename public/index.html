@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8" />
+    <title>Achetez votre Post-it Digital</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script src="https://js.stripe.com/v3/"></script>
+    <style>
+        body { margin:0; font-family:Arial,sans-serif; background:#f5f5f5;
+            display:flex;align-items:center;justify-content:center;min-height:100vh;}
+        .container {background:#fff;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.08);
+            max-width:400px;width:90%;overflow:hidden;}
+        .product {background:#fffae6;padding:2rem;text-align:center;}
+        .product img {width:100%;border-radius:4px;margin-bottom:1rem;}
+        .product h1 {margin:.5rem 0;font-size:1.5rem;color:#333;}
+        .product p.price {font-size:1.25rem;font-weight:bold;color:#e67e22;}
+        .form {padding:1.5rem;}
+        .form label {display:block;margin:.25rem 0;font-weight:bold;}
+        .form input {width:100%;padding:.75rem;margin-bottom:1rem;border:1px solid #ccc;
+            border-radius:4px;font-size:1rem;box-sizing:border-box;}
+        #card-element {padding:.75rem;border:1px solid #ccc;border-radius:4px;margin-bottom:1rem;}
+        .form button {width:100%;padding:.75rem;background:#e67e22;color:#fff;border:none;
+            border-radius:4px;font-size:1rem;cursor:pointer;transition:background .2s;}
+        .form button:hover {background:#cf711f;}
+        #error-message {color:#c0392b;font-size:.9rem;min-height:1.2rem;}
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="product">
+        <img src="images/winnerone_card.png" alt="WinnerOne" />
+        <h1>Ticket Premium</h1>
+        <p class="price">2,00 € l’unité</p>
+    </div>
+    <div class="form">
+        <form id="payment-form">
+            <label for="quantity">Quantité</label>
+            <input type="number" id="quantity" name="quantity" value="1" min="1" required />
+
+            <label for="name">Nom </label>
+            <input id="name" name="name" placeholder="Votre nom" required />
+
+            <label for="email">Email</label>
+            <input id="email" name="email" type="email" placeholder="ex@domaine.com" required />
+
+            <label for="phone">Téléphone</label>
+            <input id="phone" name="phone" placeholder="06 00 00 00 00" required />
+
+            <label>Carte bancaire</label>
+            <div id="card-element"></div>
+
+            <button id="pay-button" type="submit">Payer</button>
+            <div id="error-message"></div>
+        </form>
+    </div>
+</div>
+
+<script>
+    window.addEventListener('DOMContentLoaded', () => {
+        console.log('🔧 DOMContentLoaded — Initialisation');
+
+        // Vérifie Stripe.js
+        if (typeof Stripe === 'undefined') {
+            console.error('❌ Stripe.js non chargé');
+            return;
+        }
+        console.log('✅ Stripe.js chargé');
+
+        // Initialise Stripe
+        const stripe = Stripe('pk_test_51RIOpeCyuZqbHoZNbyYjy48m592BDrtZrnJNycbljp4AsObTRfLL0TfRwyAr9quvvt6AGDN7cNdyzaiQAFk6o6Nd00VFDSwFNE'); // ta clé publishable
+        const elements = stripe.elements();
+        const card = elements.create('card', { style: { base: { fontSize: '16px' } } });
+        card.mount('#card-element');
+
+        // Liage du form
+        const form = document.getElementById('payment-form');
+        form.addEventListener('submit', async e => {
+            e.preventDefault();
+            console.log('📝 Submit intercepté');
+
+            const qty   = parseInt(document.getElementById('quantity').value, 10);
+            const name  = document.getElementById('name').value.trim();
+            const email = document.getElementById('email').value.trim();
+            const phone = document.getElementById('phone').value.trim();
+
+            console.log({ qty, name, email, phone });
+
+            try {
+                // 1) Création du PaymentIntent
+                const resp = await fetch('/create-payment', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, email, phone, quantity: qty })
+                });
+                const data = await resp.json();
+                console.log('⬅️ create-payment:', data);
+                if (data.error) throw new Error(data.error);
+
+                // 2) Confirmation du paiement
+                const { error, paymentIntent } = await stripe.confirmCardPayment(
+                    data.clientSecret,
+                    { payment_method: { card } }
+                );
+                console.log('⬅️ confirmCardPayment:', { error, paymentIntent });
+                if (error) throw error;
+
+                // 3) Enregistrement
+                if (paymentIntent.status === 'succeeded') {
+                    console.log('✅ Paiement réussi');
+                    const saveResp = await fetch('/save-purchase', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ name, email, phone, quantity: qty })
+                    });
+                    const saveData = await saveResp.json();
+                    console.log('⬅️ save-purchase:', saveData);
+                    if (saveData.error) console.error('save-purchase error:', saveData.error);
+
+                    // 4) Redirection
+                    window.location.href = '/thanks';
+                }
+            } catch (err) {
+                document.getElementById('error-message').textContent = err.message;
+                console.error('❌ Erreur paiement:', err);
+            }
+        });
+
+        console.log('✅ Formulaire prêt');
+    });
+</script>
+</body>
+</html>

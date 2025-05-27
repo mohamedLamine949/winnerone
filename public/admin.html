@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Admin – Achats</title>
+</head>
+<body>
+<h1>Tableau des achats</h1>
+
+<button id="reset-btn" style="margin-bottom:1em; background:#e74c3c; color:#fff; padding:0.5em 1em; border:none; cursor:pointer;">
+    🗑️ Réinitialiser la base
+</button>
+
+<button id="shuffle-btn" style="margin-left:1em; padding:0.5em 1em; cursor:pointer;">
+    🎲 Choisir 3 clients au hasard
+</button>
+
+<ul id="random-list" style="margin-top:1em;"></ul>
+
+<script>
+    async function fetchPurchases() {
+        const res = await fetch('/admin/api/purchases');
+        return res.json();
+    }
+
+    // Tirage au sort équitable
+    document.getElementById('shuffle-btn').addEventListener('click', async () => {
+        const purchases = await fetchPurchases();
+        const map = {};
+        purchases.forEach(p => { map[p.email] = { name: p.name, email: p.email, phone: p.phone }; });
+        const clients = Object.values(map);
+        for (let i = clients.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [clients[i], clients[j]] = [clients[j], clients[i]];
+        }
+        const selection = clients.slice(0, 3);
+        const ul = document.getElementById('random-list');
+        ul.innerHTML = '';
+        selection.forEach(c => {
+            const li = document.createElement('li');
+            li.textContent = `${c.name} — ${c.email} — ${c.phone}`;
+            ul.appendChild(li);
+        });
+    });
+
+    // Bouton Réinitialiser
+    document.getElementById('reset-btn').addEventListener('click', async () => {
+        if (!confirm('⚠️ Veux-tu vraiment tout supprimer ?')) return;
+        const res = await fetch('/admin/reset', { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+            alert('✅ Base vidée avec succès');
+            document.getElementById('random-list').innerHTML = '';
+        } else {
+            alert('❌ Erreur lors de la réinitialisation');
+            console.error(data.error);
+        }
+    });
+</script>
+</body>
+</html>
